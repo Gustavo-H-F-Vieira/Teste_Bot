@@ -1,0 +1,92 @@
+import requests
+import pandas as pd
+from bs4 import BeautifulSoup
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+
+
+#BBusca os dados de um estado específico
+def buscarInformacoes_estado(estado):
+  url = f"https://www.ibge.gov.br/cidades-e-estados/{estado}.html"
+  response = requests.get(url)
+  if response.status_code == 200:
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    gentilico = soup.find("div", {"class": "gentilico"}).text.strip()
+    capital = soup.find("div", {"class": "capital"}).text.strip()
+    governador = soup.find("div", {"class": "governador"}).text.strip()
+    populacao = soup.find("div", {"class": "populacao"}).text.strip()
+    idh = soup.find("div", {"class": "idh"}).text.strip()
+    return {
+      "Gentílico": gentilico,
+      "Capital": capital,
+      "Governador": governador,
+      "População estimada": populacao,
+      "IDH": idh
+    }
+  else:
+    return None
+
+
+estados = [
+  "acre", "alagoas", "amapa", "amazonas", "bahia", "ceara", "espirito santo",
+  "goias", "maranhao", "mato grosso", "mato grosso do sul", "minas gerais",
+  "para", "paraiba", "parana", "pernambuco", "piaui", "rio de janeiro",
+  "rio grande do norte", "rio grande do sul", "rondonia", "roraima",
+  "santa catarina", "sao paulo", "sergipe", "tocantins"
+]
+
+informacoes_estados = []
+
+# Buscar as informações para cada estado
+for estado in estados:
+  informacoes = buscarInformacoes_estado(estado)
+  if informacoes is not None:
+    informacoes_estados.append(informacoes)
+
+df = pd.DataFrame(informacoes_estados)
+data_execucao = pd.to_datetime('today').strftime('%Y-%m-%d')
+df['Data de Execução'] = data_execucao
+
+# Salvando em Excel
+nome_arquivo = 'informacoes_estados.xlsx'
+df.to_excel(nome_arquivo, index=False)
+
+remetente = 'adicionar seu email'
+senha_remetente = '123456789'
+destinatario = 'adicionar outro gmail '
+assunto = 'Dados dos estados'
+mensagem = 'Segue em anexo o arquivo com as informações dos estados.'
+
+#Configurando SMTP do Gmail
+servidor_smtp = 'smtp.gmail.com'
+porta_smtp = 587
+
+email = MIMEMultipart()
+email['From'] = remetente
+email['To'] = destinatario
+email['Subject'] = assunto
+
+email.attach(MIMEText(mensagem, 'plain'))
+
+#Anexando o Excel
+arquivo_anexo = 'informacoes_estados.xlsx'
+parte_anexo = MIMEBase('application', 'octet-stream')
+parte_anexo.set_payload(open(arquivo_anexo, 'rb').read())
+encoders.encode_base64(parte_anexo)
+parte_anexo.add_header('Content-Disposition',
+                       f'attachment; filename={arquivo_anexo}')
+email.attach(parte_anexo)
+
+# Configurando a conexão SMTP
+conexao_smtp = smtplib.SMTP(servidor_smtp, porta_smtp)
+conexao_smtp.starttls()
+conexao_smtp.login(remetente, senha_remetente)
+
+# Enviando o Gmail
+texto_email = email.as_string()
+conexao_smtp.sendmail(remetente, destinatario, texto_email)
+conexao_smtp.quit()
